@@ -5,6 +5,9 @@ export function isCompanyEmail(email: string | null | undefined): boolean {
   return email.trim().toLowerCase().endsWith('@' + ALLOWED_DOMAIN);
 }
 
+/** The part before "@" — used as the account's username/display name. */
+export const usernameFromEmail = (email: string) => email.trim().toLowerCase().split('@')[0] || email;
+
 export const STATUSES = [
   { value: 'not_started', label: 'Not Started', color: 'bg-slate-100 text-slate-700 ring-slate-300', bar: 'bg-slate-300', solid: 'bg-slate-400', border: 'border-slate-300', chip: 'bg-slate-100 text-slate-500', icon: 'circle' },
   { value: 'in_progress', label: 'In Progress', color: 'bg-amber-100 text-amber-800 ring-amber-300', bar: 'bg-amber-400', solid: 'bg-amber-500', border: 'border-amber-400', chip: 'bg-amber-50 text-amber-600', icon: 'clock' },

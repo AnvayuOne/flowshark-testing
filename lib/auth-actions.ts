@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { q, q1, tx } from '@/lib/db';
 import { appUrl, clientIp, endSession, hashToken, newToken, startSession } from '@/lib/auth';
 import { sendActionEmail } from '@/lib/mail';
-import { ALLOWED_DOMAIN, isCompanyEmail } from '@/lib/constants';
+import { ALLOWED_DOMAIN, isCompanyEmail, usernameFromEmail } from '@/lib/constants';
 
 type Result = { ok?: true; error?: string };
 
@@ -35,11 +35,9 @@ async function recentlySent(userId: string, purpose: string) {
 }
 
 // ---------------------------------------------------------------- sign up
-export async function signUp(input: { fullName: string; email: string; password: string }): Promise<Result> {
+export async function signUp(input: { email: string; password: string }): Promise<Result> {
   const email = normEmail(input.email);
-  const fullName = String(input.fullName ?? '').trim();
   const password = String(input.password ?? '');
-  if (!fullName || fullName.length > 120) return { error: 'Please enter your full name.' };
   if (!isCompanyEmail(email) || !/^[^\s@]+@[^\s@]+$/.test(email)) return { error: `Only @${ALLOWED_DOMAIN} email addresses can sign up.` };
   const pw = pwProblem(password);
   if (pw) return { error: pw };
@@ -47,6 +45,7 @@ export async function signUp(input: { fullName: string; email: string; password:
   const existing = await q1<{ id: string }>('select id from users where email = $1', [email]);
   if (existing) return { ok: true }; // don't reveal whether the account exists
 
+  const username = usernameFromEmail(email);
   const adminList = (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
   const hash = await bcrypt.hash(password, 12);
   await tx(async (c) => {
@@ -56,7 +55,7 @@ export async function signUp(input: { fullName: string; email: string; password:
     const makeAdmin = admins === 0 || adminList.includes(email);
     await c.query(
       `insert into users (email, full_name, password_hash, email_verified_at, role) values ($1, $2, $3, now(), $4)`,
-      [email, fullName, hash, makeAdmin ? 'admin' : 'tester'],
+      [email, username, hash, makeAdmin ? 'admin' : 'tester'],
     );
   });
   return { ok: true };

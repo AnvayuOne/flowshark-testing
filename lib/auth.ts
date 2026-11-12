@@ -2,30 +2,22 @@ import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { q1, USER_COLS } from '@/lib/db';
-import { SESSION_COOKIE, SESSION_DAYS, signSession } from '@/lib/session';
+import { q1 } from '@/lib/db';
+import { SESSION_COOKIE, SESSION_DAYS, readSession, signSession } from '@/lib/session';
+import { isCompanyEmail } from '@/lib/constants';
 import type { Profile } from '@/lib/types';
-
-// TEMP: login is disabled. Every visitor is treated as this account until sign-in is restored
-// (revert this commit to bring back session-based auth from lib/session.ts).
-const DEV_BYPASS_EMAIL = 'dev@anvayuone.com';
-
-async function getDevBypassUser(): Promise<Profile> {
-  // Upsert so concurrent requests (layout + page both call requireMember()) can't race
-  // on the first-ever insert.
-  const user = await q1<Profile>(
-    `insert into users (email, full_name, password_hash, email_verified_at, role)
-     values ($1, 'Dev User', '', now(), 'admin')
-     on conflict (email) do update set email = excluded.email
-     returning ${USER_COLS}`,
-    [DEV_BYPASS_EMAIL],
-  );
-  return user!;
-}
 
 /** The signed-in, verified company user — re-checked against the DB on every request. */
 export async function getCurrentUser(): Promise<Profile | null> {
-  return getDevBypassUser();
+  const session = await readSession(cookies().get(SESSION_COOKIE)?.value);
+  if (!session) return null;
+  const user = await q1<Profile & { session_version: number; email_verified_at: string | null }>(
+    'select id, email, full_name, role, created_at, session_version, email_verified_at from users where id = $1',
+    [session.userId],
+  );
+  if (!user || user.session_version !== session.sv || !user.email_verified_at || !isCompanyEmail(user.email)) return null;
+  const { session_version: _sv, email_verified_at: _ev, ...profile } = user;
+  return profile;
 }
 
 export async function requireMember(): Promise<{ profile: Profile }> {

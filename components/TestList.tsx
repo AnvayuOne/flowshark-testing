@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { updateTestCase } from '@/lib/actions';
 import { CATEGORIES, PRIORITIES, STATUSES, moduleAccent, statusMeta } from '@/lib/constants';
 import { PriorityBadge } from '@/components/Badges';
+import NotesDrawer from '@/components/NotesDrawer';
 import { displayName, fmtDate, type Module, type Profile, type TestCase } from '@/lib/types';
 
 function SearchIcon() {
@@ -13,6 +14,15 @@ function SearchIcon() {
     <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
       <circle cx="7" cy="7" r="4.5" />
       <path d="M13 13 10.3 10.3" />
+    </svg>
+  );
+}
+
+function NoteIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 2.5h10v8l-3 3H3z" />
+      <path d="M10 13.5V10h3.5" />
     </svg>
   );
 }
@@ -32,9 +42,10 @@ type Props = {
   me: Profile;
   initialStatus: string;
   initialModule: string;
+  noteCounts: Record<string, number>;
 };
 
-export default function TestList({ modules, initialCases, people, me, initialStatus, initialModule }: Props) {
+export default function TestList({ modules, initialCases, people, me, initialStatus, initialModule, noteCounts: initialNoteCounts }: Props) {
   const router = useRouter();
   const [cases, setCases] = useState(initialCases);
   const [q, setQ] = useState('');
@@ -45,12 +56,15 @@ export default function TestList({ modules, initialCases, people, me, initialSta
   const [assignee, setAssignee] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [noteCounts, setNoteCounts] = useState(initialNoteCounts);
+  const [noteCase, setNoteCase] = useState<TestCase | null>(null);
 
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const isManager = me.role === 'admin' || me.role === 'lead';
 
   // Pick up fresh server data (after router.refresh()).
   useEffect(() => setCases(initialCases), [initialCases]);
+  useEffect(() => setNoteCounts(initialNoteCounts), [initialNoteCounts]);
 
   // Other testers' changes: refresh every 20s while the tab is visible.
   useEffect(() => {
@@ -223,6 +237,7 @@ export default function TestList({ modules, initialCases, people, me, initialSta
                       <th className="px-4 py-2 font-medium">Status</th>
                       <th className="px-4 py-2 font-medium">Assigned</th>
                       <th className="px-4 py-2 font-medium">Last update</th>
+                      <th className="px-4 py-2 font-medium">Notes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -252,6 +267,21 @@ export default function TestList({ modules, initialCases, people, me, initialSta
                         <td className="whitespace-nowrap px-4 py-2 text-xs text-slate-500">
                           {c.updated_by ? <>{displayName(peopleById.get(c.updated_by))}<br />{fmtDate(c.updated_at)}</> : '—'}
                         </td>
+                        <td className="px-4 py-2">
+                          <button
+                            onClick={() => setNoteCase(c)}
+                            title={noteCounts[c.id] ? `${noteCounts[c.id]} note${noteCounts[c.id] === 1 ? '' : 's'}` : 'Add a note'}
+                            className={`relative inline-flex h-7 w-7 items-center justify-center rounded-lg transition ${
+                              noteCounts[c.id] ? 'text-brand-600 hover:bg-brand-50' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                            }`}>
+                            <NoteIcon />
+                            {noteCounts[c.id] > 0 && (
+                              <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold text-white">
+                                {noteCounts[c.id]}
+                              </span>
+                            )}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -261,6 +291,14 @@ export default function TestList({ modules, initialCases, people, me, initialSta
           </section>
         );
       })}
+
+      <NotesDrawer
+        testCase={noteCase}
+        people={people}
+        me={me}
+        onClose={() => setNoteCase(null)}
+        onCountChange={(id, count) => setNoteCounts((prev) => ({ ...prev, [id]: count }))}
+      />
     </div>
   );
 }

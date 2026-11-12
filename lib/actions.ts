@@ -63,6 +63,17 @@ export async function updateTestCase(id: string, patch: { status?: string; assig
 }
 
 // ------------------------------------------------------------- notes
+export async function getNotes(testCaseId: string): Promise<R<{ notes: Note[] }>> {
+  try {
+    await me();
+    if (!isUuid(testCaseId)) return { error: 'Invalid test case.' };
+    const notes = await q<Note>('select * from test_notes where test_case_id = $1 order by created_at', [testCaseId]);
+    return { ok: true, notes };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function addNote(testCaseId: string, body: string): Promise<R<{ note: Note }>> {
   try {
     const user = await me();
