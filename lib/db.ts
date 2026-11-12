@@ -1,4 +1,6 @@
 import 'server-only';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import pg, { type PoolClient, type QueryResultRow } from 'pg';
 
 // Return timestamps as ISO strings so they pass cleanly to client components.
@@ -6,19 +8,64 @@ pg.types.setTypeParser(1184, (v) => new Date(v).toISOString()); // timestamptz
 pg.types.setTypeParser(1114, (v) => new Date(v + 'Z').toISOString()); // timestamp
 pg.types.setTypeParser(20, (v) => Number(v)); // bigint → number (counts / ids are small)
 
-const g = globalThis as unknown as { __pgPool?: pg.Pool };
+/** Env var names Vercel / Neon may use for the connection string, in order of preference. */
+export const DB_ENV_NAMES = ['DATABASE_URL', 'POSTGRES_URL', 'DATABASE_URL_UNPOOLED', 'POSTGRES_URL_NON_POOLING'] as const;
+
+export function connectionString() {
+  for (const name of DB_ENV_NAMES) if (process.env[name]) return process.env[name]!;
+  return null;
+}
+
+const g = globalThis as unknown as { __pgPool?: pg.Pool; __dbReady?: Promise<void> };
 
 function getPool() {
   if (!g.__pgPool) {
-    const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-    if (!connectionString) throw new Error('DATABASE_URL is not set');
-    g.__pgPool = new pg.Pool({ connectionString, max: 5, idleTimeoutMillis: 10_000 });
+    const cs = connectionString();
+    if (!cs) throw new Error('No database configured: set DATABASE_URL in Vercel → Settings → Environment Variables');
+    g.__pgPool = new pg.Pool({ connectionString: cs, max: 5, idleTimeoutMillis: 10_000, connectionTimeoutMillis: 10_000 });
   }
   return g.__pgPool;
 }
 
+/**
+ * First time this server talks to a database with no tables, create them and load
+ * the test cases (db/schema.sql + db/seed.sql). Runs once per server instance;
+ * an advisory lock stops two instances doing it at the same time.
+ */
+async function setupIfEmpty() {
+  const client = await getPool().connect();
+  try {
+    const has = await client.query<{ ok: boolean }>(`select to_regclass('public.test_cases') is not null as ok`);
+    if (has.rows[0].ok) return;
+    await client.query('select pg_advisory_lock(727001)');
+    try {
+      const again = await client.query<{ ok: boolean }>(`select to_regclass('public.test_cases') is not null as ok`);
+      if (again.rows[0].ok) return;
+      const dir = join(process.cwd(), 'db');
+      await client.query(await readFile(join(dir, 'schema.sql'), 'utf8'));
+      await client.query(await readFile(join(dir, 'seed.sql'), 'utf8'));
+      console.log('[db] Empty database: created tables and loaded test cases');
+    } finally {
+      await client.query('select pg_advisory_unlock(727001)');
+    }
+  } finally {
+    client.release();
+  }
+}
+
+export function ensureDb(): Promise<void> {
+  if (!g.__dbReady) {
+    g.__dbReady = setupIfEmpty().catch((e) => {
+      g.__dbReady = undefined; // retry on the next request
+      throw e;
+    });
+  }
+  return g.__dbReady;
+}
+
 /** Run a parameterised query and return the rows. Always use $1, $2… placeholders. */
 export async function q<T extends QueryResultRow = QueryResultRow>(text: string, params: unknown[] = []): Promise<T[]> {
+  await ensureDb();
   const res = await getPool().query<T>(text, params);
   return res.rows;
 }
@@ -30,6 +77,7 @@ export async function q1<T extends QueryResultRow = QueryResultRow>(text: string
 
 /** Run several statements in one transaction. */
 export async function tx<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
+  await ensureDb();
   const client = await getPool().connect();
   try {
     await client.query('begin');

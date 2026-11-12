@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // Load pg from node_modules at runtime instead of bundling it.
+    serverComponentsExternalPackages: ['pg'],
+    // Ship the SQL files with the server functions so an empty database can be set up automatically.
+    outputFileTracingIncludes: { '/**': ['./db/*.sql'] },
+  },
   async headers() {
     return [
       {
