@@ -1,0 +1,34 @@
+{
+  "name": "anvayu-test-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:setup": "node scripts/db-setup.mjs",
+    "seed:build": "node scripts/build-seed.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "jose": "^5.10.0",
+    "next": "^14.2.25",
+    "nodemailer": "^6.10.1",
+    "pg": "^8.23.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.17.6",
+    "@types/nodemailer": "^6.4.24",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.6.3"
+  }
+}
