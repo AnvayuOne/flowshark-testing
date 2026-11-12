@@ -8,7 +8,7 @@ export default async function TestsPage({ searchParams }: { searchParams: { stat
   const [modules, cases, people, noteCounts] = await Promise.all([
     q<Module>('select * from modules order by sort_order, name'),
     q<TestCase>('select * from test_cases order by sort_order, case_code'),
-    q<Profile>(`select ${USER_COLS} from users where email_verified_at is not null order by full_name`),
+    q<Profile>(`select ${USER_COLS} from users order by full_name`),
     q<{ test_case_id: string; n: number }>('select test_case_id, count(*)::int n from test_notes group by test_case_id'),
   ]);
 

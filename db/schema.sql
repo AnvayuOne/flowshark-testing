@@ -4,42 +4,31 @@
 -- Safe to run more than once.
 -- =====================================================================
 
--- ---------- Users -----------------------------------------------------------
--- Only @anvayuone.com addresses can ever be stored (enforced by the DB itself).
+-- ---------- People ----------------------------------------------------------
+-- No accounts: just a name, entered once and remembered in a cookie on that device.
 create table if not exists users (
-  id                uuid primary key default gen_random_uuid(),
-  email             text not null unique
-                    check (email = lower(email) and email like '%@anvayuone.com'),
-  full_name         text not null check (char_length(full_name) between 1 and 120),
-  password_hash     text not null,
-  role              text not null default 'tester'
-                    check (role in ('admin', 'lead', 'tester', 'developer')),
-  email_verified_at timestamptz,
-  session_version   int  not null default 1,   -- bump to sign the user out everywhere
-  created_at        timestamptz not null default now()
+  id         uuid primary key default gen_random_uuid(),
+  full_name  text not null check (char_length(full_name) between 1 and 120),
+  role       text not null default 'tester'
+             check (role in ('admin', 'lead', 'tester', 'developer')),
+  created_at timestamptz not null default now()
 );
 
--- Email verification + password reset tokens (only a SHA-256 hash is stored).
-create table if not exists auth_tokens (
-  token_hash  text primary key,
-  user_id     uuid not null references users (id) on delete cascade,
-  purpose     text not null check (purpose in ('verify', 'reset')),
-  expires_at  timestamptz not null,
-  used_at     timestamptz,
-  created_at  timestamptz not null default now()
-);
-create index if not exists auth_tokens_user_idx on auth_tokens (user_id, purpose);
-
--- Used to rate-limit sign-in attempts (brute-force protection).
-create table if not exists login_attempts (
-  id       bigint generated always as identity primary key,
-  email    text not null,
-  ip       text,
-  success  boolean not null,
-  at       timestamptz not null default now()
-);
-create index if not exists login_attempts_email_idx on login_attempts (email, at desc);
-create index if not exists login_attempts_ip_idx on login_attempts (ip, at desc);
+-- One-time migration away from the old email/password accounts: wipes every
+-- existing account (there's no name-only equivalent to migrate them to) and
+-- drops the columns/tables that went with them. Runs once; a no-op after that.
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_name = 'users' and column_name = 'email') then
+    delete from users;
+    alter table users drop column email;
+    alter table users drop column if exists password_hash;
+    alter table users drop column if exists email_verified_at;
+    alter table users drop column if exists session_version;
+  end if;
+end $$;
+drop table if exists auth_tokens;
+drop table if exists login_attempts;
 
 -- ---------- Modules (one per page / area of the app under test) --------------
 create table if not exists modules (

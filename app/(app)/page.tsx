@@ -32,7 +32,7 @@ export default async function DashboardPage() {
       `select h.id, h.test_case_id, h.new_status, h.changed_by, h.changed_at, t.case_code
        from status_history h join test_cases t on t.id = h.test_case_id order by h.changed_at desc limit 12`,
     ),
-    q<{ id: string; full_name: string; email: string }>('select id, full_name, email from users'),
+    q<{ id: string; full_name: string }>('select id, full_name from users'),
   ]);
 
   const rows = cases;
@@ -42,7 +42,7 @@ export default async function DashboardPage() {
   const executed = total - (all.not_started ?? 0) - (all.in_progress ?? 0);
   const pct = total ? Math.round((executed / total) * 100) : 0;
   const passRate = executed ? Math.round(((all.passed ?? 0) / executed) * 100) : 0;
-  const peopleById = new Map(people.map((p) => [p.id, p as Pick<Profile, 'full_name' | 'email'>]));
+  const peopleById = new Map(people.map((p) => [p.id, p as Pick<Profile, 'full_name'>]));
   const failedHigh = rows.filter((r) => r.status === 'failed').sort((a, b) => (a.priority === 'High' ? -1 : 1) - (b.priority === 'High' ? -1 : 1)).slice(0, 8);
 
   return (

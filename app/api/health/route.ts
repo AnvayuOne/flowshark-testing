@@ -9,9 +9,6 @@ export async function GET() {
   const report: Record<string, unknown> = {
     database_env_var: DB_ENV_NAMES.find((n) => process.env[n]) ?? 'MISSING — add DATABASE_URL in Vercel → Settings → Environment Variables, then redeploy',
     database_host: cs ? safeHost(cs) : null,
-    AUTH_SECRET: process.env.AUTH_SECRET ? (process.env.AUTH_SECRET.length >= 32 ? 'set' : 'TOO SHORT (needs 32+ characters)') : 'missing',
-    APP_URL: process.env.APP_URL ?? 'missing',
-    SMTP_HOST: process.env.SMTP_HOST ? 'set' : 'missing',
   };
 
   if (cs) {

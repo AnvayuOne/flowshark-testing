@@ -1,6 +1,6 @@
 import type { Role, Status } from './constants';
 
-export type Profile = { id: string; email: string; full_name: string | null; role: Role; created_at: string };
+export type Profile = { id: string; full_name: string; role: Role; created_at: string };
 
 export type Module = { id: string; code: string; name: string; description: string | null; sort_order: number };
 
@@ -34,8 +34,7 @@ export type HistoryRow = {
   changed_at: string;
 };
 
-export const displayName = (p?: Pick<Profile, 'full_name' | 'email'> | null) =>
-  p ? p.full_name || p.email.split('@')[0] : 'Unknown';
+export const displayName = (p?: Pick<Profile, 'full_name'> | null) => p?.full_name || 'Unknown';
 
 export const fmtDate = (iso: string | null | undefined) =>
   iso

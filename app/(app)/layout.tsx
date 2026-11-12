@@ -1,12 +1,14 @@
 import Link from 'next/link';
-import { requireMember } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 import { displayName } from '@/lib/types';
 import NavLinks from '@/components/NavLinks';
+import NamePrompt from '@/components/NamePrompt';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { profile } = await requireMember();
+  const profile = await getCurrentUser();
+  if (!profile) return <NamePrompt />;
   const isManager = profile.role === 'admin' || profile.role === 'lead';
 
   return (
@@ -26,8 +28,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <div className="text-sm font-medium text-slate-800">{displayName(profile)}</div>
               <div className="text-xs capitalize text-slate-500">{profile.role}</div>
             </div>
-            <form action="/auth/signout" method="post">
-              <button className="btn-secondary px-3 py-1.5 text-xs">Sign out</button>
+            <form action="/auth/switch-name" method="post">
+              <button className="btn-secondary px-3 py-1.5 text-xs">Not you?</button>
             </form>
           </div>
         </div>

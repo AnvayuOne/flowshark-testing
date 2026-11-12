@@ -108,13 +108,12 @@ export default function AdminPanel({ modules, people, me, caseCounts }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr><th className="px-5 py-2">Name</th><th className="px-5 py-2">Email</th><th className="px-5 py-2">Joined</th><th className="px-5 py-2">Role</th></tr>
+              <tr><th className="px-5 py-2">Name</th><th className="px-5 py-2">Joined</th><th className="px-5 py-2">Role</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {people.map((p) => (
                 <tr key={p.id}>
                   <td className="px-5 py-2 font-medium">{displayName(p)}{p.id === me.id && <span className="ml-1 text-xs text-slate-400">(you)</span>}</td>
-                  <td className="px-5 py-2 text-slate-600">{p.email}</td>
                   <td className="px-5 py-2 text-slate-500">{fmtDate(p.created_at)}</td>
                   <td className="px-5 py-2">
                     {isAdmin ? (
@@ -133,7 +132,7 @@ export default function AdminPanel({ modules, people, me, caseCounts }: Props) {
         </div>
         <p className="border-t border-slate-200 px-5 py-3 text-xs text-slate-500">
           <b>Admin</b>: everything + roles · <b>Lead</b>: create/edit/delete modules &amp; test cases · <b>Tester / Developer</b>: update status, assignee and notes.
-          New people join by signing up with their @anvayuone.com email.
+          New people join just by entering their name the first time they open the app.
         </p>
       </section>
     </div>

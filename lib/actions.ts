@@ -17,14 +17,14 @@ const str = (v: unknown, max: number) => {
 
 async function me(): Promise<Profile> {
   const u = await getCurrentUser();
-  if (!u) throw new Error('Your session has expired. Please sign in again.');
+  if (!u) throw new Error('Please enter your name first.');
   return u;
 }
 
 function fail(e: unknown): { error: string } {
   const err = e as { code?: string; message?: string };
   if (err?.code === '23505') return { error: 'That ID or code already exists.' };
-  return { error: err?.message?.startsWith('Your session') ? err.message : 'Could not save. Please try again.' };
+  return { error: err?.message === 'Please enter your name first.' ? err.message : 'Could not save. Please try again.' };
 }
 
 // ------------------------------------------------------------- status / assignee
@@ -39,7 +39,7 @@ export async function updateTestCase(id: string, patch: { status?: string; assig
       const cur = (await c.query<{ status: string }>('select status from test_cases where id = $1 for update', [id])).rows[0];
       if (!cur) return { error: 'Test case not found.' };
       if (patch.assigned_to) {
-        const ok = (await c.query('select 1 from users where id = $1 and email_verified_at is not null', [patch.assigned_to])).rowCount;
+        const ok = (await c.query('select 1 from users where id = $1', [patch.assigned_to])).rowCount;
         if (!ok) return { error: 'That person is not a member.' };
       }
       const status = patch.status ?? cur.status;
@@ -219,7 +219,7 @@ export async function setUserRole(userId: string, role: string): Promise<R> {
       const target = (await c.query<{ role: string }>('select role from users where id = $1', [userId])).rows[0];
       if (!target) return { error: 'User not found.' };
       if (target.role === 'admin' && role !== 'admin') {
-        const n = (await c.query<{ n: number }>(`select count(*)::int n from users where role = 'admin' and email_verified_at is not null`)).rows[0].n;
+        const n = (await c.query<{ n: number }>(`select count(*)::int n from users where role = 'admin'`)).rows[0].n;
         if (n <= 1) return { error: 'There must be at least one admin.' };
       }
       await c.query('update users set role = $2 where id = $1', [userId, role]);

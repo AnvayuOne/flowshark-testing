@@ -28,23 +28,23 @@ function getPool() {
 }
 
 /**
- * First time this server talks to a database with no tables, create them and load
- * the test cases (db/schema.sql + db/seed.sql). Runs once per server instance;
- * an advisory lock stops two instances doing it at the same time.
+ * First request this server instance handles: (re)apply db/schema.sql — it's
+ * written to be safe to run every time, and carries any one-time migrations —
+ * then load db/seed.sql only if test_cases is still empty (so redeploys don't
+ * keep re-seeding over real data). An advisory lock stops two instances racing.
  */
 async function setupIfEmpty() {
   const client = await getPool().connect();
   try {
-    const has = await client.query<{ ok: boolean }>(`select to_regclass('public.test_cases') is not null as ok`);
-    if (has.rows[0].ok) return;
     await client.query('select pg_advisory_lock(727001)');
     try {
-      const again = await client.query<{ ok: boolean }>(`select to_regclass('public.test_cases') is not null as ok`);
-      if (again.rows[0].ok) return;
       const dir = join(process.cwd(), 'db');
       await client.query(await readFile(join(dir, 'schema.sql'), 'utf8'));
-      await client.query(await readFile(join(dir, 'seed.sql'), 'utf8'));
-      console.log('[db] Empty database: created tables and loaded test cases');
+      const has = await client.query<{ ok: boolean }>(`select exists(select 1 from test_cases) as ok`);
+      if (!has.rows[0].ok) {
+        await client.query(await readFile(join(dir, 'seed.sql'), 'utf8'));
+        console.log('[db] Loaded test cases into an empty database');
+      }
     } finally {
       await client.query('select pg_advisory_unlock(727001)');
     }
@@ -92,5 +92,4 @@ export async function tx<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
   }
 }
 
-/** Columns that are safe to send to the browser (never the password hash). */
-export const USER_COLS = 'id, email, full_name, role, created_at';
+export const USER_COLS = 'id, full_name, role, created_at';
