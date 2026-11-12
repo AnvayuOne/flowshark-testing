@@ -4,9 +4,26 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateTestCase } from '@/lib/actions';
-import { CATEGORIES, PRIORITIES, STATUSES, statusMeta } from '@/lib/constants';
+import { CATEGORIES, PRIORITIES, STATUSES, moduleAccent, statusMeta } from '@/lib/constants';
 import { PriorityBadge } from '@/components/Badges';
 import { displayName, fmtDate, type Module, type Profile, type TestCase } from '@/lib/types';
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
+      <circle cx="7" cy="7" r="4.5" />
+      <path d="M13 13 10.3 10.3" />
+    </svg>
+  );
+}
+
+function ChipXIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+      <path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5" />
+    </svg>
+  );
+}
 
 type Props = {
   modules: Module[];
@@ -97,8 +114,24 @@ export default function TestList({ modules, initialCases, people, me, initialSta
     URL.revokeObjectURL(a.href);
   }
 
+  const moduleIndex = useMemo(() => new Map(modules.map((m, i) => [m.id, i])), [modules]);
   const visibleModules = modules.filter((m) => filtered.some((c) => c.module_id === m.id));
-  const anyFilter = q || status || moduleId || priority || category || assignee;
+
+  const chips = useMemo(() => {
+    const list: { key: string; label: string; clear: () => void }[] = [];
+    if (q.trim()) list.push({ key: 'q', label: `“${q.trim()}”`, clear: () => setQ('') });
+    if (moduleId) list.push({ key: 'module', label: modules.find((m) => m.id === moduleId)?.name ?? 'Module', clear: () => setModuleId('') });
+    if (status) list.push({ key: 'status', label: statusMeta(status).label, clear: () => setStatus('') });
+    if (priority) list.push({ key: 'priority', label: `${priority} priority`, clear: () => setPriority('') });
+    if (category) list.push({ key: 'category', label: category, clear: () => setCategory('') });
+    if (assignee)
+      list.push({
+        key: 'assignee',
+        label: assignee === 'me' ? 'Assigned to me' : assignee === 'none' ? 'Unassigned' : displayName(peopleById.get(assignee)),
+        clear: () => setAssignee(''),
+      });
+    return list;
+  }, [q, moduleId, status, priority, category, assignee, modules, peopleById]);
 
   return (
     <div className="space-y-4">
@@ -113,37 +146,51 @@ export default function TestList({ modules, initialCases, people, me, initialSta
         </div>
       </div>
 
-      <div className="card grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-6">
-        <input className="input lg:col-span-2" placeholder="Search by ID or title…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="input" value={moduleId} onChange={(e) => setModuleId(e.target.value)}>
-          <option value="">All modules</option>
-          {modules.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-        <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-        <select className="input" value={priority} onChange={(e) => setPriority(e.target.value)}>
-          <option value="">All priorities</option>
-          {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
-        </select>
-        <div className="flex gap-2">
+      <div className="card space-y-3 p-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+          <div className="relative lg:col-span-2">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><SearchIcon /></span>
+            <input className="input pl-9" placeholder="Search by ID or title…" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <select className="input" value={moduleId} onChange={(e) => setModuleId(e.target.value)}>
+            <option value="">All modules</option>
+            {modules.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+          <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+          <select className="input" value={priority} onChange={(e) => setPriority(e.target.value)}>
+            <option value="">All priorities</option>
+            {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
+          </select>
           <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">All types</option>
             {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
           </select>
+          <select className="input lg:col-span-2" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+            <option value="">Anyone</option>
+            <option value="me">Assigned to me</option>
+            <option value="none">Unassigned</option>
+            {people.map((p) => <option key={p.id} value={p.id}>{displayName(p)}</option>)}
+          </select>
         </div>
-        <select className="input lg:col-span-2" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-          <option value="">Anyone</option>
-          <option value="me">Assigned to me</option>
-          <option value="none">Unassigned</option>
-          {people.map((p) => <option key={p.id} value={p.id}>{displayName(p)}</option>)}
-        </select>
-        {anyFilter && (
-          <button className="text-left text-sm font-medium text-brand-600 hover:underline"
-            onClick={() => { setQ(''); setStatus(''); setModuleId(''); setPriority(''); setCategory(''); setAssignee(''); }}>
-            Clear filters
-          </button>
+        {chips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3">
+            {chips.map((c) => (
+              <button key={c.key} onClick={c.clear} className="filter-chip hover:bg-brand-100">
+                {c.label}
+                <ChipXIcon />
+              </button>
+            ))}
+            {chips.length > 1 && (
+              <button
+                className="text-xs font-medium text-slate-500 hover:text-slate-700 hover:underline"
+                onClick={() => { setQ(''); setStatus(''); setModuleId(''); setPriority(''); setCategory(''); setAssignee(''); }}>
+                Clear all
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -158,7 +205,11 @@ export default function TestList({ modules, initialCases, people, me, initialSta
           <section key={m.id} className="card overflow-hidden">
             <button onClick={() => setCollapsed((s) => ({ ...s, [m.id]: !s[m.id] }))}
               className="flex w-full items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left">
-              <span className="font-semibold">{collapsed[m.id] ? '▸' : '▾'} {m.name}</span>
+              <span className="flex items-center gap-2 font-semibold">
+                <span className="text-slate-400">{collapsed[m.id] ? '▸' : '▾'}</span>
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${moduleAccent(moduleIndex.get(m.id) ?? 0)}`} />
+                {m.name}
+              </span>
               <span className="text-xs text-slate-500">{passed}/{list.length} passed</span>
             </button>
             {!collapsed[m.id] && (
@@ -177,7 +228,7 @@ export default function TestList({ modules, initialCases, people, me, initialSta
                   <tbody className="divide-y divide-slate-100">
                     {list.map((c) => (
                       <tr key={c.id} className="hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-4 py-2 font-mono text-xs text-slate-500">{c.case_code}</td>
+                        <td className={`whitespace-nowrap border-l-4 px-4 py-2 font-mono text-xs text-slate-500 ${statusMeta(c.status).border}`}>{c.case_code}</td>
                         <td className="px-4 py-2">
                           <Link href={`/tests/${c.id}`} className="font-medium text-slate-900 hover:text-brand-700 hover:underline">{c.title}</Link>
                           <div className="text-xs text-slate-400">{c.category}</div>

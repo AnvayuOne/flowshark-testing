@@ -1,9 +1,25 @@
 import Link from 'next/link';
 import { requireMember } from '@/lib/auth';
 import { q } from '@/lib/db';
-import { STATUSES } from '@/lib/constants';
-import { StatusBadge, StatusBar } from '@/components/Badges';
+import { STATUSES, moduleAccent } from '@/lib/constants';
+import { Icon, StatusBadge, StatusBar } from '@/components/Badges';
 import { displayName, fmtDate, type Module, type Profile } from '@/lib/types';
+
+function Svg({ children }: { children: React.ReactNode }) {
+  return (
+    <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  );
+}
+const TOTAL_ICON = <Svg><rect x="3" y="3" width="4" height="4" rx="1" /><rect x="9" y="3" width="4" height="4" rx="1" /><rect x="3" y="9" width="4" height="4" rx="1" /><rect x="9" y="9" width="4" height="4" rx="1" /></Svg>;
+const EXECUTED_ICON = <Svg><circle cx="8" cy="8" r="6" /><path d="M8 4.5V8l2.5 1.5" /></Svg>;
+const RATE_ICON = <Svg><path d="M3 12.5 7 7l2.5 2.5L13 5" /></Svg>;
+
+/** Same chip treatment for every stat tile icon, whether a custom glyph or a shared status Icon. */
+function TileIcon({ children, className }: { children: React.ReactNode; className: string }) {
+  return <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${className}`}>{children}</span>;
+}
 
 type Row = { id: string; module_id: string; status: string; priority: string; case_code: string; title: string; updated_at: string | null };
 
@@ -43,12 +59,12 @@ export default async function DashboardPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
-        <Stat label="Total" value={total} />
-        <Stat label="Executed" value={`${pct}%`} hint={`${executed} of ${total}`} />
-        <Stat label="Pass rate" value={`${passRate}%`} hint="of executed" />
+        <Stat label="Total" value={total} icon={<TileIcon className="bg-brand-50 text-brand-600">{TOTAL_ICON}</TileIcon>} />
+        <Stat label="Executed" value={`${pct}%`} hint={`${executed} of ${total}`} icon={<TileIcon className="bg-violet-50 text-violet-600">{EXECUTED_ICON}</TileIcon>} />
+        <Stat label="Pass rate" value={`${passRate}%`} hint="of executed" icon={<TileIcon className="bg-emerald-50 text-emerald-600">{RATE_ICON}</TileIcon>} />
         {STATUSES.filter((s) => s.value !== 'skipped').map((s) => (
           <Link key={s.value} href={`/tests?status=${s.value}`}>
-            <Stat label={s.label} value={all[s.value] ?? 0} dot={s.bar} />
+            <Stat label={s.label} value={all[s.value] ?? 0} icon={<TileIcon className={s.chip}><Icon name={s.icon} className="h-4 w-4" /></TileIcon>} />
           </Link>
         ))}
       </div>
@@ -59,9 +75,12 @@ export default async function DashboardPage() {
           <span className="text-slate-500">{executed}/{total} executed</span>
         </div>
         <StatusBar counts={all} total={total} />
-        <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-600">
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-600">
           {STATUSES.map((s) => (
-            <span key={s.value} className="flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-full ${s.bar}`} />{s.label}</span>
+            <span key={s.value} className="flex items-center gap-1.5">
+              <span className={`h-2.5 w-2.5 rounded-full ${s.bar}`} />
+              {s.label} <span className="font-semibold text-slate-800">{all[s.value] ?? 0}</span>
+            </span>
           ))}
         </div>
       </div>
@@ -70,14 +89,17 @@ export default async function DashboardPage() {
         <div className="card overflow-hidden lg:col-span-2">
           <div className="border-b border-slate-200 px-5 py-3 font-semibold">Progress by page / module</div>
           <div className="divide-y divide-slate-100">
-            {modules.map((m) => {
+            {modules.map((m, i) => {
               const list = rows.filter((r) => r.module_id === m.id);
               const c = count(list);
               const done = list.length - (c.not_started ?? 0) - (c.in_progress ?? 0);
               return (
                 <Link key={m.id} href={`/tests?module=${m.id}`} className="block px-5 py-3 hover:bg-slate-50">
                   <div className="mb-1.5 flex items-center justify-between gap-4 text-sm">
-                    <span className="font-medium">{m.name}</span>
+                    <span className="flex items-center gap-2 font-medium">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${moduleAccent(i)}`} />
+                      {m.name}
+                    </span>
                     <span className="shrink-0 text-xs text-slate-500">
                       {done}/{list.length} · <span className="text-emerald-700">{c.passed ?? 0} passed</span>
                       {(c.failed ?? 0) > 0 && <span className="text-red-700"> · {c.failed} failed</span>}
@@ -135,13 +157,11 @@ export default async function DashboardPage() {
   );
 }
 
-function Stat({ label, value, hint, dot }: { label: string; value: number | string; hint?: string; dot?: string }) {
+function Stat({ label, value, hint, icon }: { label: string; value: number | string; hint?: string; icon?: React.ReactNode }) {
   return (
-    <div className="card h-full p-4">
-      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-        {dot && <span className={`h-2 w-2 rounded-full ${dot}`} />}
-        {label}
-      </div>
+    <div className="card h-full p-4 transition hover:shadow-md">
+      {icon}
+      <div className={`text-xs font-medium text-slate-500 ${icon ? 'mt-2' : ''}`}>{label}</div>
       <div className="mt-1 text-2xl font-bold">{value}</div>
       {hint && <div className="text-xs text-slate-400">{hint}</div>}
     </div>

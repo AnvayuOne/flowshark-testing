@@ -6,7 +6,7 @@ import { deleteTestCase, saveTestCase } from '@/lib/actions';
 import { CATEGORIES, PRIORITIES } from '@/lib/constants';
 import type { Module, TestCase } from '@/lib/types';
 
-export default function TestCaseForm({ modules, existing }: { modules: Module[]; existing?: TestCase }) {
+export default function TestCaseForm({ modules, existing, onDone }: { modules: Module[]; existing?: TestCase; onDone?: () => void }) {
   const router = useRouter();
   const [f, setF] = useState({
     case_code: existing?.case_code ?? '',
@@ -42,8 +42,13 @@ export default function TestCaseForm({ modules, existing }: { modules: Module[];
     const res = await saveTestCase(existing?.id ?? null, payload).catch(() => ({ error: 'Network error. Please try again.' }));
     setSaving(false);
     if (!('id' in res)) return setError(res.error ?? 'Could not save.');
-    router.push(`/tests/${res.id}`);
-    router.refresh();
+    if (onDone) {
+      onDone();
+      router.refresh();
+    } else {
+      router.push(`/tests/${res.id}`);
+      router.refresh();
+    }
   }
 
   async function onDelete() {
@@ -110,7 +115,7 @@ export default function TestCaseForm({ modules, existing }: { modules: Module[];
       <div className="flex flex-wrap justify-between gap-2">
         {existing ? <button type="button" onClick={onDelete} className="btn-danger">Delete test case</button> : <span />}
         <div className="flex gap-2">
-          <button type="button" onClick={() => router.back()} className="btn-secondary">Cancel</button>
+          <button type="button" onClick={() => (onDone ? onDone() : router.back())} className="btn-secondary">Cancel</button>
           <button className="btn-primary" disabled={saving}>{saving ? 'Saving…' : existing ? 'Save changes' : 'Create test case'}</button>
         </div>
       </div>

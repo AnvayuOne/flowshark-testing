@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { addModule as addModuleAction, deleteModule, setUserRole, updateModule } from '@/lib/actions';
 import { ROLES } from '@/lib/constants';
 import { displayName, fmtDate, type Module, type Profile } from '@/lib/types';
+import TestCaseForm from '@/components/TestCaseForm';
 
 type Props = { modules: Module[]; people: Profile[]; me: Profile; caseCounts: Record<string, number> };
 
@@ -13,6 +14,7 @@ export default function AdminPanel({ modules, people, me, caseCounts }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [newMod, setNewMod] = useState({ code: '', name: '', description: '' });
+  const [showNewTest, setShowNewTest] = useState(false);
   const isAdmin = me.role === 'admin';
 
   async function run(fn: () => Promise<{ ok?: boolean; error?: string }>) {
@@ -79,6 +81,26 @@ export default function AdminPanel({ modules, people, me, caseCounts }: Props) {
           <input className="input" placeholder="Description (optional)" value={newMod.description} onChange={(e) => setNewMod({ ...newMod, description: e.target.value })} />
           <button className="btn-primary" disabled={busy}>Add module</button>
         </form>
+      </section>
+
+      <section className="card overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+          <span className="font-semibold">Test cases</span>
+          {!showNewTest && (
+            <button className="btn-primary px-3 py-1.5 text-xs" onClick={() => setShowNewTest(true)} disabled={modules.length === 0}>
+              + Add test case
+            </button>
+          )}
+        </div>
+        {modules.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-slate-500">Add a module above first, then you can add test cases to it here.</p>
+        ) : showNewTest ? (
+          <div className="p-4">
+            <TestCaseForm modules={modules} onDone={() => setShowNewTest(false)} />
+          </div>
+        ) : (
+          <p className="px-5 py-4 text-sm text-slate-500">Click "+ Add test case" to create one in any module.</p>
+        )}
       </section>
 
       <section className="card overflow-hidden">

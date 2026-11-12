@@ -19,6 +19,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
           <NavLinks isManager={isManager} />
           <div className="ml-auto flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
+              {displayName(profile).slice(0, 1).toUpperCase()}
+            </div>
             <div className="text-right leading-tight">
               <div className="text-sm font-medium text-slate-800">{displayName(profile)}</div>
               <div className="text-xs capitalize text-slate-500">{profile.role}</div>

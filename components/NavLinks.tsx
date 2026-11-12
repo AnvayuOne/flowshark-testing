@@ -11,12 +11,12 @@ export default function NavLinks({ isManager }: { isManager: boolean }) {
     ...(isManager ? [{ href: '/admin', label: 'Manage' }] : []),
   ];
   return (
-    <nav className="flex gap-1">
+    <nav className="flex gap-1 rounded-lg bg-slate-100 p-1">
       {links.map((l) => {
         const active = l.href === '/' ? path === '/' : path.startsWith(l.href);
         return (
           <Link key={l.href} href={l.href}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${active ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100'}`}>
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${active ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
             {l.label}
           </Link>
         );

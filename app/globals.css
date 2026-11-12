@@ -25,7 +25,10 @@
     @apply rounded-xl border border-slate-200 bg-white shadow-sm;
   }
   .pill {
-    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset;
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset;
+  }
+  .filter-chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-brand-50 py-1 pl-2.5 pr-1 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-100;
   }
 }
 
