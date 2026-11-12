@@ -2,17 +2,18 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import AuthShell, { Alert } from '@/components/AuthShell';
 import { signUp } from '@/lib/auth-actions';
 import { ALLOWED_DOMAIN, isCompanyEmail } from '@/lib/constants';
 
 export default function SignupPage() {
+  const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [sentTo, setSentTo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const emailInvalid = email.length > 3 && email.includes('@') && !isCompanyEmail(email);
@@ -29,23 +30,12 @@ export default function SignupPage() {
     try {
       const res = await signUp({ fullName, email, password });
       if (res.error) return setError(res.error);
-      setSentTo(email.trim().toLowerCase());
+      router.push('/login?created=1');
     } catch {
       setError('Could not create the account right now. Please try again.');
     } finally {
       setLoading(false);
     }
-  }
-
-  if (sentTo) {
-    return (
-      <AuthShell title="Check your inbox">
-        <Alert kind="success">
-          If <strong>{sentTo}</strong> can be registered, a verification link is on its way. Click it to activate your account, then sign in.
-        </Alert>
-        <Link href="/login" className="btn-secondary w-full">Back to sign in</Link>
-      </AuthShell>
-    );
   }
 
   return (

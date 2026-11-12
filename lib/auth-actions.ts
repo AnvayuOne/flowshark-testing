@@ -6,7 +6,7 @@ import { appUrl, clientIp, endSession, hashToken, newToken, startSession } from 
 import { sendActionEmail } from '@/lib/mail';
 import { ALLOWED_DOMAIN, isCompanyEmail } from '@/lib/constants';
 
-type Result = { ok?: true; error?: string; code?: 'unverified' };
+type Result = { ok?: true; error?: string };
 
 const normEmail = (e: unknown) => String(e ?? '').trim().toLowerCase();
 const pwProblem = (p: string) =>
@@ -17,7 +17,7 @@ const pwProblem = (p: string) =>
 let dummyHash: string | null = null;
 const getDummyHash = () => (dummyHash ??= bcrypt.hashSync('not-a-real-password', 12));
 
-async function issueToken(userId: string, purpose: 'verify' | 'reset', hours: number) {
+async function issueToken(userId: string, purpose: 'reset', hours: number) {
   const token = newToken();
   await q('update auth_tokens set used_at = now() where user_id = $1 and purpose = $2 and used_at is null', [userId, purpose]);
   await q(`insert into auth_tokens (token_hash, user_id, purpose, expires_at) values ($1, $2, $3, now() + ($4 || ' hours')::interval)`, [
@@ -34,17 +34,6 @@ async function recentlySent(userId: string, purpose: string) {
   return (row?.n ?? 0) > 0;
 }
 
-async function sendVerifyEmail(email: string, token: string) {
-  await sendActionEmail({
-    to: email,
-    subject: 'Verify your email – Anvayu Test Tracker',
-    intro: 'Confirm your email address to activate your Anvayu Test Tracker account.',
-    buttonText: 'Verify email',
-    url: `${appUrl()}/verify-email?token=${encodeURIComponent(token)}`,
-    footer: 'This link expires in 24 hours. If you did not sign up, you can ignore this email.',
-  });
-}
-
 // ---------------------------------------------------------------- sign up
 export async function signUp(input: { fullName: string; email: string; password: string }): Promise<Result> {
   const email = normEmail(input.email);
@@ -55,60 +44,22 @@ export async function signUp(input: { fullName: string; email: string; password:
   const pw = pwProblem(password);
   if (pw) return { error: pw };
 
-  const existing = await q1<{ id: string; email_verified_at: string | null }>('select id, email_verified_at from users where email = $1', [email]);
-  if (existing) {
-    // Don't reveal whether the account exists. Re-send the link if it's still unverified.
-    if (!existing.email_verified_at && !(await recentlySent(existing.id, 'verify'))) {
-      await q('update users set full_name = $2, password_hash = $3 where id = $1', [existing.id, fullName, await bcrypt.hash(password, 12)]);
-      await sendVerifyEmail(email, await issueToken(existing.id, 'verify', 24));
-    }
-    return { ok: true };
-  }
+  const existing = await q1<{ id: string }>('select id from users where email = $1', [email]);
+  if (existing) return { ok: true }; // don't reveal whether the account exists
 
-  const user = await q1<{ id: string }>('insert into users (email, full_name, password_hash) values ($1, $2, $3) returning id', [
-    email, fullName, await bcrypt.hash(password, 12),
-  ]);
-  await sendVerifyEmail(email, await issueToken(user!.id, 'verify', 24));
-  return { ok: true };
-}
-
-export async function resendVerification(input: { email: string }): Promise<Result> {
-  const email = normEmail(input.email);
-  if (!isCompanyEmail(email)) return { ok: true };
-  const u = await q1<{ id: string; email_verified_at: string | null }>('select id, email_verified_at from users where email = $1', [email]);
-  if (u && !u.email_verified_at && !(await recentlySent(u.id, 'verify'))) {
-    await sendVerifyEmail(email, await issueToken(u.id, 'verify', 24));
-  }
-  return { ok: true };
-}
-
-// ---------------------------------------------------------------- verify email
-export async function verifyEmail(input: { token: string }): Promise<Result> {
-  const token = String(input.token ?? '');
-  if (!token) return { error: 'Invalid link.' };
-  return tx(async (c) => {
-    const t = (
-      await c.query<{ user_id: string }>(
-        `update auth_tokens set used_at = now()
-         where token_hash = $1 and purpose = 'verify' and used_at is null and expires_at > now()
-         returning user_id`,
-        [hashToken(token)],
-      )
-    ).rows[0];
-    if (!t) return { error: 'This link is invalid or has expired. Sign in to get a new one.' };
-
-    // Lock the users table briefly so only one person can become the first admin.
+  const adminList = (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const hash = await bcrypt.hash(password, 12);
+  await tx(async (c) => {
+    // Lock the users table briefly so only one signup can become the first admin.
     await c.query('lock table users in share row exclusive mode');
     const admins = (await c.query<{ n: number }>(`select count(*)::int n from users where role = 'admin' and email_verified_at is not null`)).rows[0].n;
-    const u = (await c.query<{ email: string }>('select email from users where id = $1', [t.user_id])).rows[0];
-    const adminList = (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-    const makeAdmin = admins === 0 || adminList.includes(u.email);
+    const makeAdmin = admins === 0 || adminList.includes(email);
     await c.query(
-      `update users set email_verified_at = coalesce(email_verified_at, now()), role = case when $2 then 'admin' else role end where id = $1`,
-      [t.user_id, makeAdmin],
+      `insert into users (email, full_name, password_hash, email_verified_at, role) values ($1, $2, $3, now(), $4)`,
+      [email, fullName, hash, makeAdmin ? 'admin' : 'tester'],
     );
-    return { ok: true } as Result;
   });
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------- sign in
@@ -128,14 +79,13 @@ export async function signIn(input: { email: string; password: string }): Promis
   if ((limits?.by_email ?? 0) >= 8 || (limits?.by_ip ?? 0) >= 30)
     return { error: 'Too many failed attempts. Please wait 15 minutes and try again.' };
 
-  const user = await q1<{ id: string; password_hash: string; email_verified_at: string | null; session_version: number }>(
-    'select id, password_hash, email_verified_at, session_version from users where email = $1',
+  const user = await q1<{ id: string; password_hash: string; session_version: number }>(
+    'select id, password_hash, session_version from users where email = $1',
     [email],
   );
   const ok = await bcrypt.compare(password, user?.password_hash ?? getDummyHash());
   await q('insert into login_attempts (email, ip, success) values ($1, $2, $3)', [email, ip, Boolean(user && ok)]);
   if (!user || !ok) return { error: 'Incorrect email or password.' };
-  if (!user.email_verified_at) return { error: 'Please verify your email first. Check your inbox for the link.', code: 'unverified' };
 
   await startSession(user.id, user.session_version);
   return { ok: true };

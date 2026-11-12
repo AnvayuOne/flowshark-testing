@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE, readSession } from '@/lib/session';
 
 // First line of defence only: every page and action re-checks the user in the database.
-const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password', '/verify-email'];
+const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password'];
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
